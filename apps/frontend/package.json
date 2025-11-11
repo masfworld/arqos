@@ -1,0 +1,60 @@
+{
+  "name": "arqos-frontend",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "scripts": {
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "start": "expo start",
+    "web": "expo start --web",
+    "build": "expo build",
+    "lint": "eslint \"**/*.{js,jsx,ts,tsx}\""
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^14.0.0",
+    "@react-native-async-storage/async-storage": "1.23.1",
+    "@react-navigation/native": "^7.1.19",
+    "@shopify/react-native-skia": "^2.3.10",
+    "clsx": "^2.1.1",
+    "expo": "~52.0.20",
+    "expo-font": "~13.0.2",
+    "expo-image": "~2.0.3",
+    "expo-linking": "^8.0.8",
+    "expo-router": "~4.0.6",
+    "expo-secure-store": "~14.0.0",
+    "expo-status-bar": "~2.0.0",
+    "expo-system-ui": "~4.0.6",
+    "nativewind": "^2.0.11",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-native": "0.76.5",
+    "react-native-gesture-handler": "~2.20.2",
+    "react-native-reanimated": "~3.16.1",
+    "react-native-safe-area-context": "4.12.0",
+    "react-native-screens": "~4.4.0",
+    "react-native-svg": "15.8.0",
+    "react-native-web": "~0.19.10",
+    "tailwind-merge": "^3.4.0",
+    "victory": "^37.3.6",
+    "victory-native": "^40.0.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.20.0",
+    "@types/react": "~18.3.12",
+    "@typescript-eslint/eslint-plugin": "^7.7.0",
+    "@typescript-eslint/parser": "^7.7.0",
+    "ajv": "^8.17.1",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.0",
+    "eslint-config-universe": "^12.0.1",
+    "expo-dev-client": "~5.0.8",
+    "postcss": "^8.4.47",
+    "tailwindcss": "3.3.2",
+    "typescript": "~5.3.3"
+  },
+  "eslintConfig": {
+    "extends": "universe/native",
+    "root": true
+  },
+  "private": true
+}

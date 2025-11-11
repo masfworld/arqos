@@ -1,0 +1,36 @@
+[tool.poetry]
+name = "arqos-coinbase-importer"
+version = "0.1.0"
+description = "Arqos Coinbase data importer for Pro and App"
+authors = ["Miguel Sotomayor <masfworld@gmail.com>"]
+readme = "README.md"
+packages = [
+    { include = "extractor"},
+    { include = "helpers"},
+    { include = "loader"},
+    { include = "tests"},
+    { include = "grpc_service"},
+    { include = "grpc_generated"}
+]
+
+# Remove shared from packages since it's a separate dependency
+
+[tool.poetry.dependencies]
+arqos-shared = { path = "../../shared", develop = true }
+python = "3.13.1"
+coinbase-advanced-py = "^1.8.2"
+psycopg2-binary = "^2.9.11"
+python-dotenv = "^1.0.0"
+pandas = "^2.3.3"
+grpcio = "^1.76.0"
+grpcio-reflection = "^1.76.0"
+protobuf = "^6.33.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.2"
+coverage = "^7.11.0"
+grpcio-tools = "^1.76.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

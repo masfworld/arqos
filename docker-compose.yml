@@ -1,0 +1,56 @@
+version: '3.8'
+
+# Shared infrastructure services
+# This file contains shared services (postgres, redis) used by all importers
+# Importers define their own services in their respective docker-compose.yml files
+# 
+# Usage:
+#   - Infrastructure only: docker compose up
+#   - With coinbase importer: docker compose -f docker-compose.yml -f apps/importers/coinbase/docker-compose.yml up
+#   - Or use the run script: ./scripts/docker-compose-run.sh coinbase
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: arqos-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DATABASE:-arqos}
+      POSTGRES_USER: ${POSTGRES_USER:-arqos_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-arqos_password}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./shared/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./apps/importers/coinbase/docker/create_tables.sql:/docker-entrypoint-initdb.d/02_create_tables.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-arqos_user} -d ${POSTGRES_DATABASE:-arqos}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+
+  redis:
+    image: redis:7-alpine
+    container_name: arqos-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: arqos-network
+

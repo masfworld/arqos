@@ -1,0 +1,37 @@
+# Coinbase importer service
+# This file defines only the coinbase-importer service
+# Use with root docker-compose.yml for shared infrastructure (postgres, redis)
+# 
+# Usage from root:
+#   docker compose -f docker-compose.yml -f apps/importers/coinbase/docker-compose.yml up
+# 
+
+services:
+  coinbase-importer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: arqos-coinbase-importer
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - ./data:/app/data
+      - ./.cache:/app/.cache
+    working_dir: /app
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DATABASE=${POSTGRES_DATABASE:-arqos}
+      - POSTGRES_USER=${POSTGRES_USER:-arqos_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-arqos_password}
+      - POSTGRES_SCHEMA=exchanges
+    command: ["python", "main.py", "--source", "app"]
+    networks:
+      - default
+
+networks:
+  default:
+    name: arqos-network
+    external: false  # Will use existing network when merged with root compose
