@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package coinbase_importer;
+
+// Simplified Importer Service for Coinbase
+service ImporterService {
+    // Start an import for a specific source (e.g., "app", "pro")
+    rpc StartImport(StartImportRequest) returns (ImportResponse);
+    
+    // Stop an import for a specific source
+    rpc StopImport(StopImportRequest) returns (ImportResponse);
+    
+    // Get current status of the importer
+    rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+    
+    // Get current configuration
+    rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
+    
+    // Update configuration
+    rpc SetConfig(SetConfigRequest) returns (SetConfigResponse);
+}
+
+// Request/Response messages for StartImport/StopImport
+message StartImportRequest {
+    string source = 1;  // "app", "pro", or "all"
+    string user_id = 2;  // UUID of the user for data isolation
+}
+
+message StopImportRequest {
+    string source = 1;  // "app", "pro", or "all"
+}
+
+message ImportResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+// Request/Response messages for GetStatus
+message GetStatusRequest {
+    string user_id = 1;  // UUID of the user to get status for (required)
+}
+
+message GetStatusResponse {
+    ImporterStatus status = 1;
+    bool success = 2;
+    string message = 3;
+}
+
+// Request/Response messages for GetConfig/SetConfig
+message GetConfigRequest {
+    string user_id = 1;  // UUID of the user to get configuration for
+}
+
+message GetConfigResponse {
+    ImporterConfig config = 1;
+    bool success = 2;
+    string message = 3;
+}
+
+message SetConfigRequest {
+    string user_id = 1;  // UUID of the user to save configuration for
+    ImporterConfig config = 2;
+}
+
+message SetConfigResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+// Data structures
+message ImporterStatus {
+    map<string, SourceStatus> sources = 1;  // Key is source name (e.g., "app", "pro")
+    bool is_running = 2;  // Overall importer running state
+    string last_updated = 3;  // ISO timestamp
+}
+
+message SourceStatus {
+    bool is_running = 1;
+    string last_run_time = 2;  // ISO timestamp
+    string last_error = 3;
+    int32 total_runs = 4;
+    int32 successful_runs = 5;
+    int32 failed_runs = 6;
+}
+
+message ImporterConfig {
+    // Coinbase API credentials
+    string coinbase_api_key = 1;
+    string coinbase_api_secret = 2;
+    
+    // Coinbase Pro file paths
+    string coinbase_pro_accounts_folder_path = 3;
+    string coinbase_pro_fills_folder_path = 4;
+    
+    // Additional settings (cache, etc.)
+    map<string, string> settings = 5;  // Examples: use_cache, cache_directory, etc.
+}

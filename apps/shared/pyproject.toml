@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "arqos-shared"
+version = "0.1.0"
+description = "Shared utilities for Arqos apps"
+authors = ["Miguel Sotomayor <masfworld@gmail.com>"]
+readme = "README.md"
+packages = [{ include = "shared" }]
+
+[tool.poetry.dependencies]
+python = "^3.13"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

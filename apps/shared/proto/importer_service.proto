@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+package importer_service;
+
+// Generic Importer Service - can be used by any importer (coinbase, binance, etc.)
+service ImporterService {
+    // Start an import for a specific source (e.g., "app", "pro")
+    rpc StartImport(StartImportRequest) returns (ImportResponse);
+    
+    // Stop an import for a specific source
+    rpc StopImport(StopImportRequest) returns (ImportResponse);
+    
+    // Get current status of the importer
+    rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+    
+    // Get current configuration
+    rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
+    
+    // Update configuration
+    rpc SetConfig(SetConfigRequest) returns (SetConfigResponse);
+}
+
+// Request/Response messages for StartImport
+message StartImportRequest {
+    string source = 1;  // e.g., "app", "pro", "all"
+}
+
+message StopImportRequest {
+    string source = 1;  // e.g., "app", "pro", "all"
+}
+
+message ImportResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+// Request/Response messages for GetStatus
+message GetStatusRequest {
+    // Empty - gets overall status
+}
+
+message GetStatusResponse {
+    ImporterStatus status = 1;
+    bool success = 2;
+    string message = 3;
+}
+
+// Request/Response messages for GetConfig/SetConfig
+message GetConfigRequest {
+    // Empty - gets all configuration
+}
+
+message GetConfigResponse {
+    ImporterConfig config = 1;
+    bool success = 2;
+    string message = 3;
+}
+
+message SetConfigRequest {
+    ImporterConfig config = 1;
+}
+
+message SetConfigResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+// Data structures
+message ImporterStatus {
+    map<string, SourceStatus> sources = 1;  // Key is source name (e.g., "app", "pro")
+    bool is_running = 2;  // Overall importer running state
+    string last_updated = 3;  // ISO timestamp
+}
+
+message SourceStatus {
+    bool is_running = 1;
+    string last_run_time = 2;  // ISO timestamp
+    string last_error = 3;
+    int32 total_runs = 4;
+    int32 successful_runs = 5;
+    int32 failed_runs = 6;
+}
+
+message ImporterConfig {
+    // Database configuration
+    DatabaseConfig database = 1;
+    
+    // Importer-specific configuration (flexible key-value pairs)
+    map<string, string> settings = 2;
+}
+
+message DatabaseConfig {
+    string host = 1;
+    int32 port = 2;
+    string database = 3;
+    string schema = 4;
+    string user = 5;
+    string password = 6;  // Should be encrypted/hashed in practice
+}
+
