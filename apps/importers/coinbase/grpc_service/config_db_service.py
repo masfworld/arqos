@@ -55,44 +55,65 @@ class ConfigDBService:
         cursor = conn.cursor()
         
         try:
+            # Query for all Coinbase configs (coinbase, coinbase_app, coinbase_pro)
+            # Order by priority: coinbase first, then coinbase_app, then coinbase_pro
             query = """
-                SELECT api_key, api_secret, config_data
+                SELECT exchange_name, api_key, api_secret, config_data
                 FROM exchanges.exchange_configs
-                WHERE user_id = %s AND exchange_name = 'coinbase' AND is_active = true
-                LIMIT 1
+                WHERE user_id = %s 
+                  AND exchange_name IN ('coinbase', 'coinbase_app', 'coinbase_pro')
+                  AND is_active = true
+                ORDER BY 
+                  CASE exchange_name
+                    WHEN 'coinbase' THEN 1
+                    WHEN 'coinbase_app' THEN 2
+                    WHEN 'coinbase_pro' THEN 3
+                  END
             """
             cursor.execute(query, (user_id,))
-            row = cursor.fetchone()
+            rows = cursor.fetchall()
             
-            if not row:
+            if not rows:
                 logger.warning(f"No Coinbase configuration found for user_id: {user_id}")
                 return None
             
-            api_key, api_secret, config_data_json = row
+            # Merge configs from all sources
+            merged_api_key = None
+            merged_api_secret = None
+            merged_config_data = {}
             
-            # Parse additional config from JSONB field
-            additional_config = {}
-            if config_data_json:
-                try:
-                    additional_config = json.loads(config_data_json) if isinstance(config_data_json, str) else config_data_json
-                except (json.JSONDecodeError, TypeError):
-                    logger.warning(f"Failed to parse config_data JSON for user_id: {user_id}")
-                    additional_config = {}
+            for row in rows:
+                exchange_name, api_key, api_secret, config_data_json = row
+                
+                # Use first non-null API key/secret found
+                if not merged_api_key and api_key:
+                    merged_api_key = api_key
+                if not merged_api_secret and api_secret:
+                    merged_api_secret = api_secret
+                
+                # Merge config_data from all sources
+                if config_data_json:
+                    try:
+                        config_data = json.loads(config_data_json) if isinstance(config_data_json, str) else config_data_json
+                        if isinstance(config_data, dict):
+                            merged_config_data.update(config_data)
+                    except (json.JSONDecodeError, TypeError):
+                        logger.warning(f"Failed to parse config_data JSON for exchange_name={exchange_name}, user_id={user_id}")
             
-            # Extract Coinbase Pro paths and settings from additional_config
-            coinbase_pro_accounts_path = additional_config.get('coinbase_pro_accounts_folder_path', '')
-            coinbase_pro_fills_path = additional_config.get('coinbase_pro_fills_folder_path', '')
-            settings = additional_config.get('settings', {})
+            # Extract Coinbase Pro paths and settings from merged config
+            coinbase_pro_accounts_path = merged_config_data.get('coinbase_pro_accounts_folder_path', '')
+            coinbase_pro_fills_path = merged_config_data.get('coinbase_pro_fills_folder_path', '')
+            settings = merged_config_data.get('settings', {})
             
             config = CoinbaseImporterConfig(
-                coinbase_api_key=api_key or '',
-                coinbase_api_secret=api_secret or '',
+                coinbase_api_key=merged_api_key or '',
+                coinbase_api_secret=merged_api_secret or '',
                 coinbase_pro_accounts_folder_path=coinbase_pro_accounts_path,
                 coinbase_pro_fills_folder_path=coinbase_pro_fills_path,
                 settings=settings if isinstance(settings, dict) else {}
             )
             
-            logger.info(f"Loaded Coinbase configuration for user_id: {user_id}")
+            logger.info(f"Loaded Coinbase configuration for user_id: {user_id} (from {len(rows)} config(s))")
             return config
             
         except Exception as e:

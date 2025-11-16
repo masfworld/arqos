@@ -1,5 +1,6 @@
--- Arqos Database Schema
--- This file initializes the database with all necessary schemas and tables
+-- migrate:up
+-- Arqos Database Schema - Initial Migration
+-- This migration creates all necessary schemas, tables, indexes, triggers, and initial data
 
 -- Create schemas
 CREATE SCHEMA IF NOT EXISTS auth;
@@ -26,18 +27,32 @@ CREATE TABLE IF NOT EXISTS auth.users (
     is_active BOOLEAN DEFAULT true
 );
 
--- Exchange configurations
+-- Available exchanges (predefined list)
+CREATE TABLE IF NOT EXISTS exchanges.exchanges (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(50) UNIQUE NOT NULL,
+    display_name VARCHAR(100) NOT NULL,
+    config_parameters JSONB NOT NULL,  -- JSON schema defining required configuration parameters
+    description TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Exchange configurations (user-specific)
 CREATE TABLE IF NOT EXISTS exchanges.exchange_configs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-    exchange_name VARCHAR(50) NOT NULL,
+    exchange_id UUID REFERENCES exchanges.exchanges(id) ON DELETE CASCADE,  -- Nullable for backward compatibility
+    exchange_name VARCHAR(50) NOT NULL,  -- Kept for backward compatibility
     api_key VARCHAR(500),
     api_secret VARCHAR(500),
     config_data JSONB,  -- Additional exchange-specific configuration (e.g., file paths, settings)
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user_id, exchange_name)
+    UNIQUE(user_id, exchange_id),  -- For new exchanges with exchange_id
+    UNIQUE(user_id, exchange_name)  -- For backward compatibility with existing data
 );
 
 -- Portfolio summary view (will be populated by triggers/views)
@@ -92,7 +107,10 @@ CREATE INDEX IF NOT EXISTS idx_import_history_user_importer ON analytics.import_
 CREATE INDEX IF NOT EXISTS idx_import_history_user_start_time ON analytics.import_history(user_id, start_time DESC);
 
 -- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_exchanges_name ON exchanges.exchanges(name);
+CREATE INDEX IF NOT EXISTS idx_exchanges_active ON exchanges.exchanges(is_active);
 CREATE INDEX IF NOT EXISTS idx_exchange_configs_user_id ON exchanges.exchange_configs(user_id);
+CREATE INDEX IF NOT EXISTS idx_exchange_configs_exchange_id ON exchanges.exchange_configs(exchange_id);
 CREATE INDEX IF NOT EXISTS idx_portfolio_summary_user_id ON portfolio.summary(user_id);
 CREATE INDEX IF NOT EXISTS idx_daily_performance_user_date ON analytics.daily_performance(user_id, date);
 
@@ -109,6 +127,12 @@ $$ language 'plpgsql';
 DROP TRIGGER IF EXISTS update_users_updated_at ON auth.users;
 CREATE TRIGGER update_users_updated_at 
 BEFORE UPDATE ON auth.users 
+FOR EACH ROW 
+EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_exchanges_updated_at ON exchanges.exchanges;
+CREATE TRIGGER update_exchanges_updated_at 
+BEFORE UPDATE ON exchanges.exchanges 
 FOR EACH ROW 
 EXECUTE FUNCTION update_updated_at_column();
 
@@ -408,6 +432,65 @@ SELECT
     ingestion_time
 FROM coinbase.coinbase_pro_fills;
 
+-- Insert predefined exchanges
+DO $$
+BEGIN
+    -- Coinbase Pro (CSV-based)
+    IF NOT EXISTS (SELECT 1 FROM exchanges.exchanges WHERE name = 'coinbase_pro') THEN
+        INSERT INTO exchanges.exchanges (name, display_name, config_parameters, description, is_active)
+        VALUES (
+            'coinbase_pro',
+            'Coinbase Pro',
+            '[
+                {
+                    "name": "coinbase_pro_accounts_folder_path",
+                    "label": "Accounts Folder Path",
+                    "type": "text",
+                    "required": true,
+                    "description": "Path to the folder containing Coinbase Pro account CSV files"
+                },
+                {
+                    "name": "coinbase_pro_fills_folder_path",
+                    "label": "Fills Folder Path",
+                    "type": "text",
+                    "required": true,
+                    "description": "Path to the folder containing Coinbase Pro fills CSV files"
+                }
+            ]'::jsonb,
+            'Import Coinbase Pro data from CSV files (accounts and fills)',
+            true
+        );
+    END IF;
+
+    -- Coinbase App (API-based)
+    IF NOT EXISTS (SELECT 1 FROM exchanges.exchanges WHERE name = 'coinbase_app') THEN
+        INSERT INTO exchanges.exchanges (name, display_name, config_parameters, description, is_active)
+        VALUES (
+            'coinbase_app',
+            'Coinbase App',
+            '[
+                {
+                    "name": "coinbase_api_key",
+                    "label": "API Key",
+                    "type": "text",
+                    "required": true,
+                    "description": "Your Coinbase API key"
+                },
+                {
+                    "name": "coinbase_api_secret",
+                    "label": "API Secret",
+                    "type": "password",
+                    "required": true,
+                    "description": "Your Coinbase API secret"
+                }
+            ]'::jsonb,
+            'Import Coinbase App data using API credentials',
+            true
+        );
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Create default admin user and print its ID + password
 DO $$
 DECLARE
@@ -416,13 +499,12 @@ DECLARE
 BEGIN
     -- Only create if it doesn't exist
     IF NOT EXISTS (SELECT 1 FROM auth.users WHERE username = 'admin') THEN
-        v_password := uuid_generate_v4()::text;  -- random plain password
 
         INSERT INTO auth.users (username, email, password_hash, first_name, last_name, is_active)
         VALUES (
             'admin',
             'admin@arqos.com',
-            crypt(v_password, gen_salt('bf')),
+            crypt('admin', gen_salt('bf')),
             'Admin',
             'User',
             true
@@ -436,3 +518,35 @@ BEGIN
     END IF;
 END;
 $$ LANGUAGE plpgsql;
+
+-- migrate:down
+-- Rollback initial schema
+-- WARNING: This will drop all data and schemas!
+
+DROP VIEW IF EXISTS analytics.unified_transactions;
+
+DROP TABLE IF EXISTS coinbase.coinbase_app_transactions CASCADE;
+DROP TABLE IF EXISTS coinbase.coinbase_app_accounts CASCADE;
+DROP TABLE IF EXISTS coinbase.coinbase_pro_fills CASCADE;
+DROP TABLE IF EXISTS coinbase.coinbase_pro_accounts CASCADE;
+DROP TABLE IF EXISTS coinbase.coinbase_app_transactions_raw CASCADE;
+DROP TABLE IF EXISTS coinbase.coinbase_app_accounts_raw CASCADE;
+
+DROP TABLE IF EXISTS analytics.alerts CASCADE;
+DROP TABLE IF EXISTS scheduler.import_jobs CASCADE;
+DROP TABLE IF EXISTS analytics.import_history CASCADE;
+DROP TABLE IF EXISTS analytics.daily_performance CASCADE;
+DROP TABLE IF EXISTS portfolio.summary CASCADE;
+DROP TABLE IF EXISTS exchanges.exchange_configs CASCADE;
+DROP TABLE IF EXISTS exchanges.exchanges CASCADE;
+DROP TABLE IF EXISTS auth.users CASCADE;
+
+DROP FUNCTION IF EXISTS update_updated_at_column() CASCADE;
+
+DROP SCHEMA IF EXISTS coinbase CASCADE;
+DROP SCHEMA IF EXISTS scheduler CASCADE;
+DROP SCHEMA IF EXISTS analytics CASCADE;
+DROP SCHEMA IF EXISTS portfolio CASCADE;
+DROP SCHEMA IF EXISTS exchanges CASCADE;
+DROP SCHEMA IF EXISTS auth CASCADE;
+

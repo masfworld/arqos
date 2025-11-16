@@ -306,7 +306,9 @@ export const alertApi = {
 
 export interface ExchangeConnection {
   id: string
+  exchangeId?: string | null
   name: string
+  exchangeName?: string // Actual exchange name (e.g., 'coinbase_pro', 'coinbase_app')
   status: 'active' | 'inactive' | 'error'
   lastSync: string | null
   autoImport: boolean
@@ -318,9 +320,103 @@ export interface ExchangeConnection {
   }>
 }
 
+export interface Exchange {
+  id: string
+  name: string
+  display_name: string
+  config_parameters: Array<{
+    name: string
+    label: string
+    type: string
+    required?: boolean
+    description?: string
+  }>
+  description: string | null
+  is_active: boolean
+}
+
+export interface CreateExchangeConfigRequest {
+  exchange_id: string
+  config_data: Record<string, any>
+}
+
+export interface ImportHistoryLog {
+  id: string
+  importer_name: string
+  source: string
+  status: string
+  start_time: string
+  end_time: string | null
+  records_processed: number | null
+  error_message: string | null
+  duration_seconds: number | null
+}
+
 export const exchangeApi = {
+  async getExchanges(): Promise<ApiResponse<Exchange[]>> {
+    return apiRequest<Exchange[]>('/api/v1/exchanges')
+  },
+
   async getConfigs(): Promise<ApiResponse<ExchangeConnection[]>> {
     return apiRequest<ExchangeConnection[]>('/api/v1/exchanges/configs')
+  },
+
+  async createConfig(config: CreateExchangeConfigRequest): Promise<ApiResponse<{
+    id: string
+    exchange_id: string
+    exchange_name: string
+    is_active: boolean
+    created_at: string
+    updated_at: string
+  }>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/exchanges/configs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(await getAuthToken() && { Authorization: `Bearer ${await getAuthToken()}` }),
+        },
+        body: JSON.stringify(config),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Failed to create exchange configuration' }))
+        return { error: errorData.message || `HTTP ${response.status}` }
+      }
+
+      const data = await response.json()
+      return { data }
+    } catch (error) {
+      console.error('Create exchange config error:', error)
+      return { error: error instanceof Error ? error.message : 'Network error' }
+    }
+  },
+
+  async getImportHistory(limit = 50, offset = 0): Promise<ApiResponse<ImportHistoryLog[]>> {
+    return apiRequest<ImportHistoryLog[]>(`/api/v1/exchanges/import-history?limit=${limit}&offset=${offset}`)
+  },
+
+  async triggerImport(configId: string): Promise<ApiResponse<any>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/exchanges/configs/${configId}/import`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(await getAuthToken() && { Authorization: `Bearer ${await getAuthToken()}` }),
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Failed to trigger import' }))
+        return { error: errorData.message || `HTTP ${response.status}` }
+      }
+
+      const data = await response.json()
+      return { data }
+    } catch (error) {
+      console.error('Trigger import error:', error)
+      return { error: error instanceof Error ? error.message : 'Network error' }
+    }
   },
 }
 
