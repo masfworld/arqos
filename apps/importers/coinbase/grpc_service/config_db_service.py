@@ -55,20 +55,14 @@ class ConfigDBService:
         cursor = conn.cursor()
         
         try:
-            # Query for all Coinbase configs (coinbase, coinbase_app, coinbase_pro)
-            # Order by priority: coinbase first, then coinbase_app, then coinbase_pro
+            # Query for all Coinbase configs (coinbase_app, coinbase_pro)
             query = """
                 SELECT exchange_name, api_key, api_secret, config_data
                 FROM exchanges.exchange_configs
                 WHERE user_id = %s 
-                  AND exchange_name IN ('coinbase', 'coinbase_app', 'coinbase_pro')
+                  AND exchange_name IN ('coinbase_app', 'coinbase_pro')
                   AND is_active = true
-                ORDER BY 
-                  CASE exchange_name
-                    WHEN 'coinbase' THEN 1
-                    WHEN 'coinbase_app' THEN 2
-                    WHEN 'coinbase_pro' THEN 3
-                  END
+                ORDER BY exchange_name
             """
             cursor.execute(query, (user_id,))
             rows = cursor.fetchall()
