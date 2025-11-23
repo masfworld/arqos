@@ -1,8 +1,22 @@
 import { Tabs } from 'expo-router'
-import { Platform } from 'react-native'
+import { Platform, TouchableOpacity, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { useRouter } from 'expo-router'
+import { useAuth } from '../../contexts/AuthContext'
 
 export default function TabLayout() {
+  const { isAuthenticated, logout } = useAuth()
+  const router = useRouter()
+
+  const handleLogout = async () => {
+    await logout()
+    router.replace('/login')
+  }
+
+  const handleLogin = () => {
+    router.push('/login')
+  }
+
   return (
     <Tabs
       screenOptions={{
@@ -24,6 +38,43 @@ export default function TabLayout() {
         headerTitleStyle: {
           fontWeight: 'bold',
         },
+        headerRight: Platform.OS === 'web' ? () => (
+          <View style={{ marginRight: 16 }}>
+            {isAuthenticated ? (
+              <TouchableOpacity
+                onPress={handleLogout}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  backgroundColor: '#f1f5f9',
+                  borderRadius: 8,
+                }}
+              >
+                <Ionicons name="log-out-outline" size={18} color="#1e293b" />
+                <Text style={{ color: '#1e293b', fontWeight: '500' }}>Logout</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onPress={handleLogin}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  backgroundColor: '#2563eb',
+                  borderRadius: 8,
+                }}
+              >
+                <Ionicons name="log-in-outline" size={18} color="white" />
+                <Text style={{ color: 'white', fontWeight: '500' }}>Login</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : undefined,
       }}
     >
       <Tabs.Screen

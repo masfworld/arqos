@@ -1,49 +1,79 @@
-from unittest.mock import patch
 from extractor.coinbase_secrets import CoinbaseSecrets
+from grpc_service.coinbase_importer_config import CoinbaseImporterConfig
 import pytest
 
 
-@patch("shared.utils.env_loader.get_coinbase_api_key")
-def test_get_api_key_from_env(mock_get_api_key):
-    """Test getting API key from environment variables."""
-    # Mock the environment variable
-    mock_get_api_key.return_value = "mock-api-key"
+def test_get_api_key_from_config():
+    """Test getting API key from configuration."""
+    # Create a mock config with API key
+    config = CoinbaseImporterConfig(
+        coinbase_api_key="mock-api-key",
+        coinbase_api_secret="mock-api-secret"
+    )
 
-    # Initialize CoinbaseSecrets (no config needed)
-    secrets = CoinbaseSecrets()
+    # Initialize CoinbaseSecrets with config
+    secrets = CoinbaseSecrets(config)
 
     # Call get_api_key
     api_key = secrets.get_api_key()
 
     # Assertions
     assert api_key == "mock-api-key"
-    mock_get_api_key.assert_called_once()
 
 
-@patch("shared.utils.env_loader.get_coinbase_api_secret")
-def test_get_api_secret_from_env(mock_get_api_secret):
-    """Test getting API secret from environment variables."""
-    # Mock the environment variable
-    mock_get_api_secret.return_value = "mock-api-secret"
+def test_get_api_secret_from_config():
+    """Test getting API secret from configuration."""
+    # Create a mock config with API secret
+    config = CoinbaseImporterConfig(
+        coinbase_api_key="mock-api-key",
+        coinbase_api_secret="mock-api-secret"
+    )
 
-    # Initialize CoinbaseSecrets
-    secrets = CoinbaseSecrets()
+    # Initialize CoinbaseSecrets with config
+    secrets = CoinbaseSecrets(config)
 
     # Call get_api_secret
     api_secret = secrets.get_api_secret()
 
     # Assertions
     assert api_secret == "mock-api-secret"
-    mock_get_api_secret.assert_called_once()
 
 
-@patch("shared.utils.env_loader.get_coinbase_api_key")
-def test_get_api_key_missing(mock_get_api_key):
-    """Test error when API key is missing from environment."""
-    # Mock missing environment variable
-    mock_get_api_key.return_value = None
+def test_get_api_key_missing():
+    """Test error when API key is missing from configuration."""
+    # Create config without API key
+    config = CoinbaseImporterConfig(
+        coinbase_api_key="",
+        coinbase_api_secret="mock-secret"
+    )
 
-    # Initialize CoinbaseSecrets
+    # Initialize CoinbaseSecrets with config
+    secrets = CoinbaseSecrets(config)
+
+    # Attempt to get API key and expect an exception
+    with pytest.raises(RuntimeError, match="Failed to retrieve the Coinbase API key"):
+        secrets.get_api_key()
+
+
+def test_get_api_secret_missing():
+    """Test error when API secret is missing from configuration."""
+    # Create config without API secret
+    config = CoinbaseImporterConfig(
+        coinbase_api_key="mock-key",
+        coinbase_api_secret=""
+    )
+
+    # Initialize CoinbaseSecrets with config
+    secrets = CoinbaseSecrets(config)
+
+    # Attempt to get API secret and expect an exception
+    with pytest.raises(RuntimeError, match="Failed to retrieve the Coinbase API secret"):
+        secrets.get_api_secret()
+
+
+def test_get_api_key_no_config():
+    """Test error when no config is provided."""
+    # Initialize CoinbaseSecrets without config
     secrets = CoinbaseSecrets()
 
     # Attempt to get API key and expect an exception
@@ -51,13 +81,9 @@ def test_get_api_key_missing(mock_get_api_key):
         secrets.get_api_key()
 
 
-@patch("shared.utils.env_loader.get_coinbase_api_secret")
-def test_get_api_secret_missing(mock_get_api_secret):
-    """Test error when API secret is missing from environment."""
-    # Mock missing environment variable
-    mock_get_api_secret.return_value = None
-
-    # Initialize CoinbaseSecrets
+def test_get_api_secret_no_config():
+    """Test error when no config is provided."""
+    # Initialize CoinbaseSecrets without config
     secrets = CoinbaseSecrets()
 
     # Attempt to get API secret and expect an exception

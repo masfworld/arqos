@@ -134,3 +134,4 @@ coinbase_pro_files/
 *.backup
 *.old
 *.orig
+db

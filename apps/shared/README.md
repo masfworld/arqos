@@ -1,22 +1,80 @@
-# Simple Environment Configuration
+# Shared Configuration and Database
 
-This is a simplified environment configuration system using `python-dotenv` to load shared and project-specific environment variables.
+This directory contains shared configuration and database migrations for the Arqos project.
 
-## Structure
+## Database Migrations
 
+Database migrations are managed using [dbmate](https://github.com/amacneil/dbmate). Migration files are located in `database/migrations/`.
+
+### Quick Start
+
+1. Install dbmate: `brew install dbmate` (or download from [releases](https://github.com/amacneil/dbmate/releases))
+2. Ensure your `.env` file has the database variables set: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DATABASE`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
+3. Run migrations as shown below
+
+### Running Migrations
+
+Since the project uses individual PostgreSQL environment variables (`POSTGRES_HOST`, `POSTGRES_PORT`, etc.) instead of `DATABASE_URL`, you need to construct the connection string.
+
+First, load the environment variables from `apps/shared/.env`:
+
+```bash
+# Load environment variables from .env file
+export $(grep -v '^#' ./apps/shared/.env | xargs)
+
+# Then run dbmate
+dbmate \
+  --migrations-dir apps/shared/database/migrations \
+  --url "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DATABASE}?sslmode=disable" \
+  up
 ```
-arqos/
-└── apps/
-    ├── shared/
-    │   ├── .env                    # Shared configuration (database, Redis, API, etc.)
-    │   └── utils/
-    │       └── env_loader.py       # Environment loading utilities
-    ├── importers/
-    │   └── coinbase/
-    │       ├── .env                # Coinbase-specific configuration
-    │       └── env_example.py      # Usage example
-    ├── frontend/
-    └── backend/
+
+### Creating Migrations
+
+```bash
+# Load environment variables first
+export $(grep -v '^#' ./apps/shared/.env | xargs)
+# Create new migration
+dbmate \
+  --migrations-dir apps/shared/database/migrations \
+  --url "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DATABASE}?sslmode=disable" \
+  new migration_name
+```
+
+This creates a file with `-- migrate:up` and `-- migrate:down` sections. Edit the file to add your SQL.
+
+### Common Commands
+
+```bash
+# Load environment variables first
+export $(grep -v '^#' ./apps/shared/.env | xargs)
+
+# Apply pending migrations
+dbmate --migrations-dir apps/shared/database/migrations --url "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DATABASE}?sslmode=disable" up
+
+# Rollback last migration
+dbmate --migrations-dir apps/shared/database/migrations --url "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DATABASE}?sslmode=disable" down
+
+# Check migration status
+dbmate --migrations-dir apps/shared/database/migrations --url "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DATABASE}?sslmode=disable" status
+```
+
+**Tip:** Create a shell function to simplify usage:
+
+```bash
+dbmate-arqos() {
+  export $(grep -v '^#' ./apps/shared/.env | xargs)
+  dbmate \
+    --migrations-dir apps/shared/database/migrations \
+    --url "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DATABASE}?sslmode=disable" \
+    "$@"
+}
+
+# Then use it like:
+dbmate-arqos up
+dbmate-arqos down
+dbmate-arqos status
+dbmate-arqos new migration_name
 ```
 
 ## How it works
@@ -80,10 +138,3 @@ python env_example.py
 
 This will show you all the loaded configuration values.
 
-
-
-# TODO: Next actions
-- Check if loads are incremental
-- In coinbase, parse coinbase_app_accounts and transactions from raw to processed,
-- Try to build a view in public schema to load transactions
-- Endpoint in background to call previous view

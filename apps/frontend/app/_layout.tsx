@@ -17,12 +17,13 @@ function RootLayoutNav() {
       const firstSegment = segments[0]
       const inAuthGroup = firstSegment === '(tabs)'
       const onLoginPage = firstSegment === 'login'
+      const onAddExchange = firstSegment === 'add-exchange'
       // Check if we're at root by checking if firstSegment is undefined
       const isRoot = !firstSegment
 
       if (!isAuthenticated) {
         // If not authenticated and trying to access protected routes or root, redirect to login
-        if (inAuthGroup || isRoot) {
+        if (inAuthGroup || isRoot || onAddExchange) {
           router.replace('/login')
         }
       } else {
@@ -34,7 +35,7 @@ function RootLayoutNav() {
     }, 0)
 
     return () => clearTimeout(timer)
-  }, [isAuthenticated, loading, segments])
+  }, [isAuthenticated, loading, segments, router])
 
   if (loading) {
     return (
@@ -65,6 +66,12 @@ function RootLayoutNav() {
             backgroundColor: 'white',
           },
           headerTintColor: '#1e293b',
+        }} 
+      />
+      <Stack.Screen 
+        name="add-exchange" 
+        options={{ 
+          headerShown: false,
         }} 
       />
     </Stack>
