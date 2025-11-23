@@ -17,6 +17,8 @@
     "@shopify/react-native-skia": "^2.3.10",
     "clsx": "^2.1.1",
     "expo": "~52.0.20",
+    "expo-document-picker": "~13.0.3",
+    "expo-file-system": "~18.0.12",
     "expo-font": "~13.0.2",
     "expo-image": "~2.0.3",
     "expo-linking": "^8.0.8",

@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native'
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert, Platform } from 'react-native'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -81,29 +81,99 @@ export default function ImportsScreen() {
   }, [isAuthenticated, importLogs, importingConfigs, fetchImportLogs, fetchConfigs])
 
   const handleManualImport = async (configId: string) => {
+    console.log('handleManualImport called for configId:', configId)
     setImportingConfigs((prev) => new Set(prev).add(configId))
     
     try {
+      console.log('Calling exchangeApi.triggerImport...')
       const result = await exchangeApi.triggerImport(configId)
+      console.log('triggerImport result:', result)
       
       if (result.error) {
-        Alert.alert('Import Error', result.error)
+        console.error('Import error:', result.error)
+        // Don't show alert - import history will show the error
       } else {
-        Alert.alert('Success', 'Import started successfully')
-        // Refresh configs and logs after a short delay
-        setTimeout(() => {
-          fetchConfigs()
-          fetchImportLogs()
-        }, 1000)
+        console.log('Import started successfully')
+        // Don't show alert - import history will show the status
       }
+      
+      // Always refresh configs and logs to show the latest status
+      setTimeout(() => {
+        fetchConfigs()
+        fetchImportLogs()
+      }, 1000)
     } catch (error) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to trigger import')
+      console.error('Exception in handleManualImport:', error)
+      // Don't show alert - import history will show the error
+      // Still refresh to show any error status
+      setTimeout(() => {
+        fetchConfigs()
+        fetchImportLogs()
+      }, 1000)
     } finally {
       setImportingConfigs((prev) => {
         const next = new Set(prev)
         next.delete(configId)
         return next
       })
+    }
+  }
+
+  const handleDeleteConfig = (configId: string, configName: string) => {
+    if (Platform.OS === 'web') {
+      // For web, use window.confirm
+      const confirmed = window.confirm(
+        `Are you sure you want to delete "${configName}"? This action cannot be undone.`
+      )
+      if (!confirmed) return
+      
+      // Proceed with deletion
+      ;(async () => {
+        try {
+          const result = await exchangeApi.deleteConfig(configId)
+          
+          if (result.error) {
+            alert(`Delete Error: ${result.error}`)
+          } else {
+            alert('Exchange configuration deleted successfully')
+            // Refresh configs after deletion
+            fetchConfigs()
+          }
+        } catch (error) {
+          alert(`Error: ${error instanceof Error ? error.message : 'Failed to delete exchange configuration'}`)
+        }
+      })()
+    } else {
+      // For native platforms, use Alert.alert
+      Alert.alert(
+        'Delete Exchange',
+        `Are you sure you want to delete "${configName}"? This action cannot be undone.`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const result = await exchangeApi.deleteConfig(configId)
+                
+                if (result.error) {
+                  Alert.alert('Delete Error', result.error)
+                } else {
+                  Alert.alert('Success', 'Exchange configuration deleted successfully')
+                  // Refresh configs after deletion
+                  fetchConfigs()
+                }
+              } catch (error) {
+                Alert.alert('Error', error instanceof Error ? error.message : 'Failed to delete exchange configuration')
+              }
+            },
+          },
+        ]
+      )
     }
   }
 
@@ -156,9 +226,6 @@ export default function ImportsScreen() {
     } else if (exchangeName === 'coinbase_app') {
       importerName = 'coinbase'
       source = 'app'
-    } else if (exchangeName === 'coinbase') {
-      importerName = 'coinbase'
-      source = 'all'
     } else {
       // For other exchanges, use the name as importer name
       importerName = exchangeName
@@ -249,17 +316,39 @@ export default function ImportsScreen() {
                       )}
                     </View>
                   </View>
-                </View>
-
-                <View className="border-t border-slate-200 pt-3 mt-3">
-                  <View className="flex-row items-center justify-between mb-2">
-                    <Text className="text-sm text-slate-600">Last Sync</Text>
-                    <View className="flex-row items-center gap-3">
-                      <Text className="text-sm font-medium text-slate-900">
-                        {formatDate(config.lastSync)}
-                      </Text>
+                  <View className="flex-row items-start gap-2">
+                    <View className="flex-row items-center gap-2">
                       <TouchableOpacity
-                        onPress={() => handleManualImport(config.id)}
+                        onPress={() => {
+                          console.log('Edit button pressed for config:', config.id, config.name)
+                          router.push(`/add-exchange?configId=${config.id}`)
+                        }}
+                        className="p-2"
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="create-outline" size={16} color="#3b82f6" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => {
+                          console.log('Delete button pressed for config:', config.id, config.name)
+                          handleDeleteConfig(config.id, config.name)
+                        }}
+                        className="p-2 -mr-2 -mt-2"
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                      </TouchableOpacity>
+                    </View>
+                    <View className="items-end">
+                      <TouchableOpacity
+                        onPress={() => {
+                          console.log('Import button pressed for config:', config.id, config.name)
+                          console.log('Button disabled?', importingConfigs.has(config.id) || hasRunningImport(config))
+                          console.log('hasRunningImport result:', hasRunningImport(config))
+                          handleManualImport(config.id)
+                        }}
                         disabled={importingConfigs.has(config.id) || hasRunningImport(config)}
                         className={`px-3 py-1.5 rounded-lg flex-row items-center gap-1.5 ${
                           importingConfigs.has(config.id) || hasRunningImport(config)
@@ -282,29 +371,9 @@ export default function ImportsScreen() {
                           {importingConfigs.has(config.id) || hasRunningImport(config) ? 'Importing...' : 'Import'}
                         </Text>
                       </TouchableOpacity>
+                      <Text className="text-xs text-slate-500 mt-1">Last Sync: {formatDate(config.lastSync)}</Text>
                     </View>
                   </View>
-
-                  {config.importSources && config.importSources.length > 0 && (
-                    <View className="mt-2">
-                      <Text className="text-xs text-slate-500 mb-1">Import Sources:</Text>
-                      <View className="space-y-1">
-                        {config.importSources.map((source, idx) => (
-                          <View key={idx} className="flex-row items-center justify-between">
-                            <View className="flex-row items-center gap-2">
-                              <Text className="text-xs text-slate-700 capitalize">{source.source}</Text>
-                              {source.autoImport && (
-                                <Ionicons name="sync" size={12} color="#3b82f6" />
-                              )}
-                            </View>
-                            <Text className="text-xs text-slate-500">
-                              {formatDate(source.lastSync)}
-                            </Text>
-                          </View>
-                        ))}
-                      </View>
-                    </View>
-                  )}
                 </View>
               </View>
             ))}

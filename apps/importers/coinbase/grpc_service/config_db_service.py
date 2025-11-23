@@ -114,6 +114,9 @@ class ConfigDBService:
             )
             
             logger.info(f"Loaded Coinbase configuration for user_id: {user_id} (from {len(rows)} config(s))")
+            logger.debug(f"Config details - API key present: {bool(merged_api_key)}, API secret present: {bool(merged_api_secret)}, "
+                        f"Pro accounts path: {coinbase_pro_accounts_path or '(empty)'}, "
+                        f"Pro fills path: {coinbase_pro_fills_path or '(empty)'}")
             return config
             
         except Exception as e:

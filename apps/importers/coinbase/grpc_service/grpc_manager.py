@@ -115,14 +115,30 @@ class GRPCManager:
                 config = self.get_config(user_id)
                 if not config:
                     return False, f"No Coinbase configuration found for user_id: {user_id}. Please configure Coinbase settings first using SetConfig."
-                
-                # Validate that API credentials are present
-                if not config.coinbase_api_key or not config.coinbase_api_secret:
-                    return False, f"Coinbase API credentials are missing for user_id: {user_id}. Please configure API key and secret using SetConfig."
             except Exception as e:
                 return False, f"Error loading configuration: {str(e)}"
             
             sources = ["app", "pro"] if source == "all" else [source]
+            logger.info(f"[start_import] Validating requirements for sources: {sources}")
+            
+            # Validate source-specific requirements
+            for src in sources:
+                if src == "app":
+                    # Coinbase App requires API credentials
+                    logger.info(f"[start_import] Validating 'app' source - checking API credentials")
+                    if not config.coinbase_api_key or not config.coinbase_api_secret:
+                        error_msg = f"Coinbase API credentials are missing for user_id: {user_id}. Please configure API key and secret using SetConfig."
+                        logger.error(f"[start_import] {error_msg}")
+                        return False, error_msg
+                    logger.info(f"[start_import] 'app' source validation passed")
+                elif src == "pro":
+                    # Coinbase Pro requires file paths (NOT API credentials)
+                    logger.info(f"[start_import] Validating 'pro' source - checking file paths (accounts: {config.coinbase_pro_accounts_folder_path or 'empty'}, fills: {config.coinbase_pro_fills_folder_path or 'empty'})")
+                    if not config.coinbase_pro_accounts_folder_path and not config.coinbase_pro_fills_folder_path:
+                        error_msg = f"Coinbase Pro file paths are missing for user_id: {user_id}. Please configure at least one of coinbase_pro_accounts_folder_path or coinbase_pro_fills_folder_path using SetConfig."
+                        logger.error(f"[start_import] {error_msg}")
+                        return False, error_msg
+                    logger.info(f"[start_import] 'pro' source validation passed")
             
             # Initialize status for this user if not exists
             if user_id not in self._status:

@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react'
 import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { exchangeApi, Exchange } from '../lib/api'
 
 export default function AddExchangeScreen() {
   const router = useRouter()
+  const params = useLocalSearchParams()
+  const configId = params.configId as string | undefined
+  const isEditMode = !!configId
+  
   const [exchanges, setExchanges] = useState<Exchange[]>([])
   const [selectedExchange, setSelectedExchange] = useState<Exchange | null>(null)
   const [formData, setFormData] = useState<Record<string, string>>({})
@@ -13,8 +17,12 @@ export default function AddExchangeScreen() {
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    loadExchanges()
-  }, [])
+    if (isEditMode && configId) {
+      loadConfigForEdit(configId)
+    } else {
+      loadExchanges()
+    }
+  }, [configId, isEditMode])
 
   const loadExchanges = async () => {
     setLoading(true)
@@ -25,6 +33,50 @@ export default function AddExchangeScreen() {
       setExchanges(result.data)
     }
     setLoading(false)
+  }
+
+  const loadConfigForEdit = async (id: string) => {
+    setLoading(true)
+    try {
+      const configResult = await exchangeApi.getConfig(id)
+      if (configResult.error) {
+        Alert.alert('Error', configResult.error)
+        router.back()
+        return
+      }
+
+      if (configResult.data) {
+        const config = configResult.data
+        
+        // Load the exchange details
+        const exchangesResult = await exchangeApi.getExchanges()
+        if (exchangesResult.data) {
+          const exchange = exchangesResult.data.find(e => e.id === config.exchange_id)
+          if (exchange) {
+            setSelectedExchange(exchange)
+            
+            // Pre-populate form with existing config data
+            const initialData: Record<string, string> = {}
+            exchange.config_parameters.forEach((param) => {
+              // Get value from config_data, with fallbacks for API credentials
+              const value = config.config_data[param.name] || 
+                           config.config_data[`coinbase_${param.name}`] || 
+                           ''
+              initialData[param.name] = value || ''
+            })
+            setFormData(initialData)
+          } else {
+            Alert.alert('Error', 'Exchange not found')
+            router.back()
+          }
+        }
+      }
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to load configuration')
+      router.back()
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleSelectExchange = (exchange: Exchange) => {
@@ -97,13 +149,17 @@ export default function AddExchangeScreen() {
             <Ionicons name="arrow-back" size={24} color="#1e293b" />
           </TouchableOpacity>
           <View className="flex-1">
-            <Text className="text-3xl font-bold text-slate-900">Add Exchange</Text>
-            <Text className="text-slate-600">Configure a new exchange connection</Text>
+            <Text className="text-3xl font-bold text-slate-900">
+              {isEditMode ? 'Edit Exchange' : 'Add Exchange'}
+            </Text>
+            <Text className="text-slate-600">
+              {isEditMode ? 'Update exchange configuration' : 'Configure a new exchange connection'}
+            </Text>
           </View>
         </View>
 
-        {/* Exchange Selection */}
-        {!selectedExchange ? (
+        {/* Exchange Selection - only show if not in edit mode */}
+        {!isEditMode && !selectedExchange ? (
           <View className="space-y-4">
             <Text className="text-xl font-semibold text-slate-900">Select an Exchange</Text>
             {exchanges.length === 0 ? (
@@ -136,17 +192,19 @@ export default function AddExchangeScreen() {
           </View>
         ) : (
           <View className="space-y-4">
-            {/* Back to selection */}
-            <TouchableOpacity
-              onPress={() => {
-                setSelectedExchange(null)
-                setFormData({})
-              }}
-              className="flex-row items-center"
-            >
-              <Ionicons name="arrow-back" size={20} color="#3b82f6" />
-              <Text className="ml-2 text-blue-600 font-medium">Back to selection</Text>
-            </TouchableOpacity>
+            {/* Back to selection - only show if not in edit mode */}
+            {!isEditMode && (
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedExchange(null)
+                  setFormData({})
+                }}
+                className="flex-row items-center"
+              >
+                <Ionicons name="arrow-back" size={20} color="#3b82f6" />
+                <Text className="ml-2 text-blue-600 font-medium">Back to selection</Text>
+              </TouchableOpacity>
+            )}
 
             {/* Exchange info */}
             <View className="bg-white rounded-lg border border-slate-200 p-4">
@@ -159,39 +217,46 @@ export default function AddExchangeScreen() {
             {/* Configuration form */}
             <View className="space-y-4">
               <Text className="text-xl font-semibold text-slate-900">Configuration</Text>
-              {selectedExchange.config_parameters.map((param) => (
-                <View key={param.name} className="bg-white rounded-lg border border-slate-200 p-4">
-                  <View className="mb-2">
-                    <Text className="text-sm font-medium text-slate-900">
-                      {param.label}
-                      {param.required && <Text className="text-red-500"> *</Text>}
-                    </Text>
-                    {param.description && (
-                      <Text className="text-xs text-slate-500 mt-1">{param.description}</Text>
+              {selectedExchange.config_parameters.map((param) => {
+                const isPath = param.name.toLowerCase().includes('path')
+                const placeholder = isPath
+                  ? 'Enter full folder path (e.g., /Users/username/folder or C:\\Users\\username\\folder)'
+                  : `Enter ${param.label.toLowerCase()}`
+                
+                return (
+                  <View key={param.name} className="bg-white rounded-lg border border-slate-200 p-4">
+                    <View className="mb-2">
+                      <Text className="text-sm font-medium text-slate-900">
+                        {param.label}
+                        {param.required && <Text className="text-red-500"> *</Text>}
+                      </Text>
+                      {param.description && (
+                        <Text className="text-xs text-slate-500 mt-1">{param.description}</Text>
+                      )}
+                    </View>
+                    {param.type === 'password' ? (
+                      <TextInput
+                        secureTextEntry
+                        value={formData[param.name] || ''}
+                        onChangeText={(value) => handleInputChange(param.name, value)}
+                        placeholder={placeholder}
+                        className="border border-slate-300 rounded-lg px-3 py-2 text-slate-900"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                      />
+                    ) : (
+                      <TextInput
+                        value={formData[param.name] || ''}
+                        onChangeText={(value) => handleInputChange(param.name, value)}
+                        placeholder={placeholder}
+                        className="border border-slate-300 rounded-lg px-3 py-2 text-slate-900"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                      />
                     )}
                   </View>
-                  {param.type === 'password' ? (
-                    <TextInput
-                      secureTextEntry
-                      value={formData[param.name] || ''}
-                      onChangeText={(value) => handleInputChange(param.name, value)}
-                      placeholder={`Enter ${param.label.toLowerCase()}`}
-                      className="border border-slate-300 rounded-lg px-3 py-2 text-slate-900"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                    />
-                  ) : (
-                    <TextInput
-                      value={formData[param.name] || ''}
-                      onChangeText={(value) => handleInputChange(param.name, value)}
-                      placeholder={`Enter ${param.label.toLowerCase()}`}
-                      className="border border-slate-300 rounded-lg px-3 py-2 text-slate-900"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                    />
-                  )}
-                </View>
-              ))}
+                )
+              })}
             </View>
 
             {/* Submit button */}
@@ -210,7 +275,9 @@ export default function AddExchangeScreen() {
               ) : (
                 <>
                   <Ionicons name="checkmark-circle" size={20} color="white" />
-                  <Text className="text-white font-medium ml-2">Save Configuration</Text>
+                  <Text className="text-white font-medium ml-2">
+                    {isEditMode ? 'Update Configuration' : 'Save Configuration'}
+                  </Text>
                 </>
               )}
             </TouchableOpacity>

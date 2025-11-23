@@ -361,6 +361,19 @@ export const exchangeApi = {
     return apiRequest<ExchangeConnection[]>('/api/v1/exchanges/configs')
   },
 
+  async getConfig(configId: string): Promise<ApiResponse<{
+    id: string
+    exchange_id: string
+    exchange_name: string
+    exchange: Exchange | null
+    config_data: Record<string, any>
+    is_active: boolean
+    created_at: string
+    updated_at: string
+  }>> {
+    return apiRequest(`/api/v1/exchanges/configs/${configId}`)
+  },
+
   async createConfig(config: CreateExchangeConfigRequest): Promise<ApiResponse<{
     id: string
     exchange_id: string
@@ -396,10 +409,10 @@ export const exchangeApi = {
     return apiRequest<ImportHistoryLog[]>(`/api/v1/exchanges/import-history?limit=${limit}&offset=${offset}`)
   },
 
-  async triggerImport(configId: string): Promise<ApiResponse<any>> {
+  async deleteConfig(configId: string): Promise<ApiResponse<{ message: string; id: string }>> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/exchanges/configs/${configId}/import`, {
-        method: 'POST',
+      const response = await fetch(`${API_BASE_URL}/api/v1/exchanges/configs/${configId}`, {
+        method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
           ...(await getAuthToken() && { Authorization: `Bearer ${await getAuthToken()}` }),
@@ -407,11 +420,43 @@ export const exchangeApi = {
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Failed to trigger import' }))
+        const errorData = await response.json().catch(() => ({ message: 'Failed to delete exchange configuration' }))
         return { error: errorData.message || `HTTP ${response.status}` }
       }
 
       const data = await response.json()
+      return { data }
+    } catch (error) {
+      console.error('Delete exchange config error:', error)
+      return { error: error instanceof Error ? error.message : 'Network error' }
+    }
+  },
+
+  async triggerImport(configId: string): Promise<ApiResponse<any>> {
+    try {
+      const url = `${API_BASE_URL}/api/v1/exchanges/configs/${configId}/import`
+      console.log('triggerImport: Making request to', url)
+      const token = await getAuthToken()
+      console.log('triggerImport: Auth token present?', !!token)
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      })
+
+      console.log('triggerImport: Response status', response.status, response.statusText)
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Failed to trigger import' }))
+        console.error('triggerImport: Error response', errorData)
+        return { error: errorData.message || `HTTP ${response.status}` }
+      }
+
+      const data = await response.json()
+      console.log('triggerImport: Success response', data)
       return { data }
     } catch (error) {
       console.error('Trigger import error:', error)

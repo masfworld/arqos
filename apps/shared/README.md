@@ -2,25 +2,6 @@
 
 This directory contains shared configuration and database migrations for the Arqos project.
 
-## Structure
-
-```
-arqos/
-└── apps/
-    ├── shared/
-    │   ├── .env                    # Shared configuration (database, Redis, API, etc.)
-    │   ├── database/
-    │   │   └── migrations/         # Database migration files
-    │   └── utils/
-    │       └── env_loader.py       # Environment loading utilities
-    ├── importers/
-    │   └── coinbase/
-    │       ├── .env                # Coinbase-specific configuration
-    │       └── env_example.py      # Usage example
-    ├── frontend/
-    └── backend/
-```
-
 ## Database Migrations
 
 Database migrations are managed using [dbmate](https://github.com/amacneil/dbmate). Migration files are located in `database/migrations/`.

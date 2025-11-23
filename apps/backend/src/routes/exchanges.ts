@@ -249,6 +249,86 @@ router.get('/configs', authenticateToken, asyncHandler(async (req, res) => {
   res.json(transformed);
 }));
 
+// Get a single exchange configuration by ID
+router.get('/configs/:id', authenticateToken, asyncHandler(async (req, res) => {
+  const userId = req.user?.id;
+  
+  if (!userId) {
+    throw new CustomError('User not authenticated', 401);
+  }
+
+  const configId = req.params.id;
+
+  if (!configId) {
+    throw new CustomError('Config ID is required', 400);
+  }
+
+  // Get exchange config with exchange details
+  const configQuery = `
+    SELECT 
+      ec.id,
+      ec.exchange_id,
+      ec.exchange_name,
+      ec.api_key,
+      ec.api_secret,
+      ec.config_data,
+      ec.is_active,
+      ec.created_at,
+      ec.updated_at,
+      e.id as exchange_id_from_table,
+      e.name as exchange_name_key,
+      e.display_name,
+      e.config_parameters
+    FROM exchanges.exchange_configs ec
+    LEFT JOIN exchanges.exchanges e ON ec.exchange_id = e.id
+    WHERE ec.id = $1 AND ec.user_id = $2
+  `;
+  
+  const configResult = await db.query(configQuery, [configId, userId]);
+
+  if (configResult.rows.length === 0) {
+    throw new CustomError('Exchange configuration not found', 404);
+  }
+
+  const row = configResult.rows[0];
+  
+  // Parse config_data if it's a string
+  let configData = row.config_data;
+  if (typeof configData === 'string') {
+    try {
+      configData = JSON.parse(configData);
+    } catch (e) {
+      configData = {};
+    }
+  }
+
+  // Build the response with all config data
+  const response = {
+    id: row.id,
+    exchange_id: row.exchange_id,
+    exchange_name: row.exchange_name,
+    exchange: row.exchange_id_from_table ? {
+      id: row.exchange_id_from_table,
+      name: row.exchange_name_key,
+      display_name: row.display_name,
+      config_parameters: row.config_parameters
+    } : null,
+    config_data: {
+      ...configData,
+      // Include API credentials in config_data for editing
+      api_key: row.api_key || configData?.api_key || configData?.coinbase_api_key || '',
+      api_secret: row.api_secret || configData?.api_secret || configData?.coinbase_api_secret || '',
+      coinbase_api_key: row.api_key || configData?.coinbase_api_key || '',
+      coinbase_api_secret: row.api_secret || configData?.coinbase_api_secret || '',
+    },
+    is_active: row.is_active,
+    created_at: row.created_at,
+    updated_at: row.updated_at
+  };
+
+  res.json(response);
+}));
+
 // Create exchange configuration
 router.post('/configs', authenticateToken, asyncHandler(async (req, res) => {
   const userId = req.user?.id;
@@ -333,11 +413,9 @@ router.post('/configs', authenticateToken, asyncHandler(async (req, res) => {
     JSON.stringify(configDataJson)
   ]);
 
-  // For Coinbase exchanges, also create/update a 'coinbase' entry that the importer can find
-  // The importer looks for exchange_name = 'coinbase'
-  if (exchange.name.startsWith('coinbase')) {
-    await syncCoinbaseConfig(userId, api_key, api_secret, configDataJson);
-  }
+  // Note: The Python importer can query for coinbase_pro/coinbase_app directly
+  // No need to create a separate 'coinbase' entry - the importer merges configs from
+  // all coinbase-related exchange_names automatically
 
   // Automatically create hourly sync job for this exchange if it doesn't exist
   // Skip automatic import for exchanges that don't support it (e.g., coinbase_pro)
@@ -387,6 +465,82 @@ router.post('/configs', authenticateToken, asyncHandler(async (req, res) => {
     is_active: result.rows[0].is_active,
     created_at: result.rows[0].created_at,
     updated_at: result.rows[0].updated_at
+  });
+}));
+
+// Delete exchange configuration
+router.delete('/configs/:id', authenticateToken, asyncHandler(async (req, res) => {
+  const userId = req.user?.id;
+  
+  if (!userId) {
+    throw new CustomError('User not authenticated', 401);
+  }
+
+  const configId = req.params.id;
+
+  if (!configId) {
+    throw new CustomError('Config ID is required', 400);
+  }
+
+  // First, get the config to find the exchange name for scheduler cleanup
+  const getConfigQuery = `
+    SELECT exchange_id, exchange_name
+    FROM exchanges.exchange_configs
+    WHERE id = $1 AND user_id = $2
+  `;
+  
+  const configResult = await db.query(getConfigQuery, [configId, userId]);
+  
+  if (configResult.rows.length === 0) {
+    throw new CustomError('Exchange configuration not found', 404);
+  }
+
+  const config = configResult.rows[0];
+  const exchangeName = config.exchange_name;
+
+  // Delete the exchange config
+  const deleteQuery = `
+    DELETE FROM exchanges.exchange_configs
+    WHERE id = $1 AND user_id = $2
+    RETURNING id
+  `;
+  
+  const deleteResult = await db.query(deleteQuery, [configId, userId]);
+
+  if (deleteResult.rows.length === 0) {
+    throw new CustomError('Failed to delete exchange configuration', 500);
+  }
+
+  // Also delete any associated scheduler jobs for this exchange
+  try {
+    // Map exchange name to importer name
+    const importerName: string = exchangeName.startsWith('coinbase') ? 'coinbase' : exchangeName;
+    
+    // Determine source based on exchange type
+    let source: string = 'all';
+    if (exchangeName === 'coinbase_app') {
+      source = 'app';
+    } else if (exchangeName === 'coinbase_pro') {
+      source = 'pro';
+    }
+
+    // Delete scheduler jobs for this exchange
+    const deleteJobsQuery = `
+      DELETE FROM scheduler.import_jobs
+      WHERE user_id = $1 
+        AND importer_name = $2
+        AND source = $3
+    `;
+    
+    await db.query(deleteJobsQuery, [userId, importerName, source]);
+  } catch (schedulerError) {
+    // Log error but don't fail the deletion
+    console.error('Failed to delete associated scheduler jobs:', schedulerError);
+  }
+
+  res.status(200).json({
+    message: 'Exchange configuration deleted successfully',
+    id: configId
   });
 }));
 
@@ -532,17 +686,40 @@ router.post('/configs/:id/import', authenticateToken, asyncHandler(async (req, r
     throw new CustomError(`Importer ${importerName} not configured`, 500);
   }
 
-  const result = await grpcClient.startImport(
-    {
-      host: importerConfig.host,
-      port: importerConfig.port,
-      importerName: importerName,
-    },
-    source,
-    userId
-  );
+  console.log(`[Import Trigger] Starting import for user ${userId}, exchange: ${exchangeName}, importer: ${importerName}, source: ${source}`);
+  console.log(`[Import Trigger] gRPC config: ${importerConfig.host}:${importerConfig.port}`);
 
-  res.json(result);
+  try {
+    const result = await grpcClient.startImport(
+      {
+        host: importerConfig.host,
+        port: importerConfig.port,
+        importerName: importerName,
+      },
+      source,
+      userId
+    );
+
+    console.log(`[Import Trigger] gRPC response:`, result);
+    
+    // Check if the import actually started successfully
+    if (!result.success) {
+      console.error(`[Import Trigger] Import failed to start: ${result.message}`);
+      throw new CustomError(result.message || 'Failed to start import', 400);
+    }
+    
+    console.log(`[Import Trigger] Import started successfully`);
+    res.json(result);
+  } catch (error: any) {
+    console.error(`[Import Trigger] Failed to start import:`, error);
+    if (error instanceof CustomError) {
+      throw error;
+    }
+    throw new CustomError(
+      error.message || 'Failed to start import. Check if the importer service is running.',
+      500
+    );
+  }
 }));
 
 
