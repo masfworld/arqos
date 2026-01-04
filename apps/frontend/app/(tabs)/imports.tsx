@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { exchangeApi, ExchangeConnection, ImportHistoryLog } from '../../lib/api'
-import { useAuth } from '../../contexts/AuthContext'
+import { useAuth } from '../../context/AuthContext'
 
 export default function ImportsScreen() {
   const router = useRouter()

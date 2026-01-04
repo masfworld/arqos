@@ -6,7 +6,7 @@ import { PortfolioChart, PortfolioHistory } from '../../components/PortfolioChar
 import { TopAssets } from '../../components/TopAssets'
 import { portfolioApi, DailyPerformance, PortfolioSummary, HoldingsResponse } from '../../lib/api'
 import { Ionicons } from '@expo/vector-icons'
-import { useAuth } from '../../contexts/AuthContext'
+import { useAuth } from '../../context/AuthContext'
 
 export default function DashboardScreen() {
   const { isAuthenticated } = useAuth()

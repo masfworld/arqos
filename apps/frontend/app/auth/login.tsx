@@ -1,8 +1,8 @@
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native'
 import { useState } from 'react'
 import { useRouter } from 'expo-router'
-import { useAuth } from '../contexts/AuthContext'
-import { authApi } from '../lib/api'
+import { useAuth } from '../../context/AuthContext'
+import { authApi } from '../../lib/api'
 
 export default function LoginScreen() {
   const [username, setUsername] = useState('')

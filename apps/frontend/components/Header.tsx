@@ -1,7 +1,7 @@
 import { View, Text, TouchableOpacity, Platform } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../context/AuthContext'
 
 export function Header() {
   const { isAuthenticated, logout } = useAuth()

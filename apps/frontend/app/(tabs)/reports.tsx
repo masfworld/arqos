@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { PortfolioChart, PortfolioHistory } from '../../components/PortfolioChart'
 import { portfolioApi, DailyPerformance } from '../../lib/api'
-import { useAuth } from '../../contexts/AuthContext'
+import { useAuth } from '../../context/AuthContext'
 
 export default function ReportsScreen() {
   const { isAuthenticated } = useAuth()

@@ -2,7 +2,7 @@ import { Tabs } from 'expo-router'
 import { Platform, TouchableOpacity, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
-import { useAuth } from '../../contexts/AuthContext'
+import { useAuth } from '../../context/AuthContext'
 
 export default function TabLayout() {
   const { isAuthenticated, logout } = useAuth()
@@ -10,11 +10,11 @@ export default function TabLayout() {
 
   const handleLogout = async () => {
     await logout()
-    router.replace('/login')
+    router.replace('/auth/login')
   }
 
   const handleLogin = () => {
-    router.push('/login')
+    router.push('/auth/login')
   }
 
   return (

@@ -1,15 +1,24 @@
 import { Router, Request, Response } from 'express';
 import { asyncHandler } from '../middleware/errorHandler';
 import { DatabaseService } from '../services/DatabaseService';
-import '../middleware/auth'; // Import to ensure type declarations are available
+import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
 const db = DatabaseService.getInstance();
 
 // Get unified transactions across all exchanges
-router.get('/', asyncHandler(async (req, res) => {
+router.get('/', authenticateToken, asyncHandler(async (req, res) => {
   const userId = req.user?.id;
+  
+  if (!userId) {
+    throw new Error('User ID is required');
+  }
+  
   const { limit = 50, offset = 0, type, exchange, asset } = req.query;
+  
+  // Convert limit and offset to numbers
+  const limitNum = parseInt(limit as string, 10) || 50;
+  const offsetNum = parseInt(offset as string, 10) || 0;
   
   let query = `
     SELECT 
@@ -49,15 +58,34 @@ router.get('/', asyncHandler(async (req, res) => {
   }
   
   paramIndex++;
-  query += ` ORDER BY date DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
-  params.push(limit, offset);
+  query += ` ORDER BY date ASC NULLS LAST LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+  params.push(limitNum, offsetNum);
+  
+  // Debug logging in development
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('Transactions query:', {
+      userId,
+      userIdType: typeof userId,
+      query: query.replace(/\s+/g, ' ').trim(),
+      params: params.map((p, i) => `$${i + 1}=${p}`).join(', '),
+    });
+  }
   
   const result = await db.query(query, params);
+  
+  // Debug logging in development
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('Transactions result:', {
+      rowCount: result.rows.length,
+      firstRow: result.rows[0] || null,
+    });
+  }
+  
   res.json(result.rows);
 }));
 
 // Get transaction statistics
-router.get('/stats', asyncHandler(async (req, res) => {
+router.get('/stats', authenticateToken, asyncHandler(async (req, res) => {
   const userId = req.user?.id;
   
   const query = `

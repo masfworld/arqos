@@ -1,7 +1,7 @@
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { Platform, View, ActivityIndicator } from 'react-native'
 import { useEffect } from 'react'
-import { AuthProvider, useAuth } from '../contexts/AuthContext'
+import { AuthProvider, useAuth } from '../context/AuthContext'
 import '../styles/global.css'
 
 function RootLayoutNav() {
@@ -16,7 +16,7 @@ function RootLayoutNav() {
     const timer = setTimeout(() => {
       const firstSegment = segments[0]
       const inAuthGroup = firstSegment === '(tabs)'
-      const onLoginPage = firstSegment === 'login'
+      const onLoginPage = firstSegment === 'auth' && segments[1] === 'login'
       const onAddExchange = firstSegment === 'add-exchange'
       // Check if we're at root by checking if firstSegment is undefined
       const isRoot = !firstSegment
@@ -24,7 +24,7 @@ function RootLayoutNav() {
       if (!isAuthenticated) {
         // If not authenticated and trying to access protected routes or root, redirect to login
         if (inAuthGroup || isRoot || onAddExchange) {
-          router.replace('/login')
+          router.replace('/auth/login')
         }
       } else {
         // If authenticated and on login page or root, redirect to tabs
@@ -58,7 +58,7 @@ function RootLayoutNav() {
         }}
       />
       <Stack.Screen 
-        name="login" 
+        name="auth/login" 
         options={{ 
           headerShown: Platform.OS === 'web' ? false : true,
           title: 'Login',
